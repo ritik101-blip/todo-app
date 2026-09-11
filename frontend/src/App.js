@@ -1,37 +1,121 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
+
+const API_URL = "http://localhost:5000/api/todos";
 
 function App() {
   const [task, setTask] = useState("");
   const [todos, setTodos] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const addTodo = (e) => {
+  // Database se tasks fetch karna
+  const fetchTodos = async () => {
+    try {
+      const response = await fetch(API_URL);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch tasks");
+      }
+
+      const data = await response.json();
+      setTodos(data);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    }
+  };
+
+  // Page load hote hi tasks lana
+  useEffect(() => {
+    fetchTodos();
+  }, []);
+
+  // New task add karna
+  const addTodo = async (e) => {
     e.preventDefault();
 
     if (!task.trim()) return;
 
-    const newTodo = {
-      id: Date.now(),
-      title: task,
-      completed: false,
-    };
+    try {
+      setLoading(true);
 
-    setTodos([...todos, newTodo]);
-    setTask("");
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: task.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add task");
+      }
+
+      const newTodo = await response.json();
+
+      setTodos((previousTodos) => [...previousTodos, newTodo]);
+      setTask("");
+    } catch (error) {
+      console.error("Add error:", error);
+      alert("Task add nahi ho paya");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleTodo = (id) => {
-    setTodos(
-      todos.map((todo) =>
-        todo.id === id
-          ? { ...todo, completed: !todo.completed }
-          : todo
-      )
-    );
+  // Task complete/uncomplete karna
+  const toggleTodo = async (id) => {
+    const selectedTodo = todos.find((todo) => todo.id === id);
+
+    if (!selectedTodo) return;
+
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          completed: !selectedTodo.completed,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update task");
+      }
+
+      const updatedTodo = await response.json();
+
+      setTodos((previousTodos) =>
+        previousTodos.map((todo) =>
+          todo.id === id ? updatedTodo : todo
+        )
+      );
+    } catch (error) {
+      console.error("Update error:", error);
+      alert("Task update nahi ho paya");
+    }
   };
 
-  const deleteTodo = (id) => {
-    setTodos(todos.filter((todo) => todo.id !== id));
+  // Task delete karna
+  const deleteTodo = async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete task");
+      }
+
+      setTodos((previousTodos) =>
+        previousTodos.filter((todo) => todo.id !== id)
+      );
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Task delete nahi ho paya");
+    }
   };
 
   return (
@@ -93,7 +177,9 @@ function App() {
               onChange={(e) => setTask(e.target.value)}
             />
 
-            <button type="submit">+ Add Task</button>
+            <button type="submit" disabled={loading}>
+              {loading ? "Adding..." : "+ Add Task"}
+            </button>
           </form>
 
           <h2 className="task-heading">Your Tasks</h2>
@@ -113,7 +199,7 @@ function App() {
               >
                 <input
                   type="checkbox"
-                  checked={todo.completed}
+                  checked={Boolean(todo.completed)}
                   onChange={() => toggleTodo(todo.id)}
                 />
 
